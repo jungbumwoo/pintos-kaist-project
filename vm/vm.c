@@ -65,6 +65,14 @@ struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
+	
+	/* pg_round_down()으로 vaddr의 페이지 번호를 얻음 */
+	/* hash_find() 함수를 사용해서 hash_elem 구조체 얻음 */
+	/* 만약 존재하지 않는다면 NULL 리턴 */
+	/* hash_entry()로 해당 hash_elem의 vm_entry 구조체 리턴 */
+
+	// 인자로 받은 vaddr에 해당하는 page(entry)? 검색 후 반환 
+
 
 	return page;
 }
@@ -75,6 +83,12 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
+
+	/*
+		hash_insert() 함수를 이용하여 vm_entry를 해시 테이블에 삽입
+		삽입 성공 시 true 반환
+		실패 시 false 반환
+	*/
 
 	return succ;
 }
@@ -112,6 +126,8 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
+
+	// Project 3-Memory Management. gitbook
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -152,15 +168,25 @@ vm_dealloc_page (struct page *page) {
 bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
+	// Project 3-Memory Management
+	// You will first need to get a page and then calls vm_do_claim_page with the page.
 	/* TODO: Fill this function */
 
 	return vm_do_claim_page (page);
 }
 
 /* Claim the PAGE and set up the mmu. */
+// claim : allocate a physical frame
 static bool
 vm_do_claim_page (struct page *page) {
-	struct frame *frame = vm_get_frame ();
+	struct frame *frame = vm_get_frame (); // for allocate a physical frame
+
+	/*
+	Project 3-Memory Management
+	Then, you need to set up the MMU. 
+	In other words, add the mapping from the virtual address to the physical address in the page table. 
+	The return value should indicate whether the operation was successful or not.
+	*/
 
 	/* Set links */
 	frame->page = page;
@@ -174,12 +200,19 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+	/* hash_init()으로 해시테이블 초기화 */
+	/* 인자로 해시 테이블과 vm_hash_func과 vm_less_func 사용 */
+	
+	// table 초기화
+	// vm_entry 들을 해시 테이블에 추가
 }
 
 /* Copy supplemental page table from src to dst */
+// __do_fork 할 때 쓰임
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
+			
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -187,4 +220,6 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	// 버킷리스트와 vm_entry들 제거
+	// hash_destroy 하면 될 덧
 }
