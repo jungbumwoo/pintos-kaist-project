@@ -41,6 +41,8 @@ struct thread;
  * uninit_page, file_page, anon_page, and page cache (project4).
  * DO NOT REMOVE/MODIFY PREDEFINED MEMBER OF THIS STRUCTURE. */
 struct page {
+	// struct page :represents a page in virtual memory. It stores all the necessary data that we need to know about the page
+
 	const struct page_operations *operations;
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
@@ -50,6 +52,7 @@ struct page {
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
+		// special data type that allows us to store different types of data in a memory region. There are multiple members in the union, but only one member can contain a value at a time.
 		struct uninit_page uninit;
 		struct anon_page anon;
 		struct file_page file;
@@ -61,8 +64,11 @@ struct page {
 
 /* The representation of "frame" */
 struct frame {
-	void *kva;
+	void *kva;	// the kernel virtual address
 	struct page *page;
+
+	// You are allowed to add more members as you implement a frame management interface.
+	// 보통 리스트로 넣으려나?
 };
 
 /* The function table for page operations.
@@ -85,6 +91,7 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	// 각 thread, process들의 table
 };
 
 #include "threads/thread.h"

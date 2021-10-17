@@ -311,6 +311,9 @@ process_exec (void *f_name) {
 
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
 
+	/* Initializing the set of vm_entries, e.g. hash table */
+	/* Initialize interrupt frame and load executable */
+
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
 
@@ -459,7 +462,8 @@ process_exit (void) {
 	// P2-5 Close current executable run by this process
 	file_close(curr->running);
 
-	process_cleanup ();
+	/* Add vm_entry delete function */
+	process_cleanup (); // 안에 #VM supplemental_page_table_kill (&curr->spt);
 
 	// Wake up blocked parent
 	sema_up(&curr->wait_sema);
@@ -760,6 +764,16 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
+		/* Create vm_entry(Use malloc) */
+		/* Setting vm_entry members, offset and size of file to read
+		when virtual page is required, zero byte to pad at the end, … */
+		/* Add vm_entry to hash table by insert_vme() */
+
+		/*
+		Delete allocating and mapping physical page part
+		아래 Get a page of memory 랑 Load this page는 대체시켜야하는거 아닌가
+		*/
+
 		/* Get a page of memory. */
 		uint8_t *kpage = palloc_get_page (PAL_USER);
 		if (kpage == NULL)
@@ -778,6 +792,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			palloc_free_page (kpage);
 			return false;
 		}
+
+		
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
@@ -801,6 +817,10 @@ setup_stack (struct intr_frame *if_) {
 		else
 			palloc_free_page (kpage);
 	}
+	/* Create vm_entry */
+	/* Set up vm_entry members */
+	/* Using insert_vme(), add vm_enty to hash table */
+
 	return success;
 }
 
