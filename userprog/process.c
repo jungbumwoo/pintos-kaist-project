@@ -852,6 +852,24 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	struct load_info* li = (struct load_info *) aux;
+	if (page == NULL) return false;
+	ASSERT(li -> page_read_bytes <= PGSIZE);
+	ASSERT(li -> page_zero_bytes <= PGSIZE);
+
+	/* load this page. */
+	if (li -> page_read_bytes > 0){
+		file_seek(li -> file, li -> ofs);
+		if (file_read (li -> file, page -> va, li-> page_read_bytes) != (off_t) li -> page_read_bytes){
+			vm_dealloc_page(page);
+			free(li);
+			return false;
+		}
+	}
+	memset(page -> va + li -> page_read_bytes, 0, li -> page_zero_bytes);
+	file_close(li -> file);
+	free(li);
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -875,6 +893,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
+	file_seek(file, ofs); // 얘 나중에
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
@@ -883,15 +902,25 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		
+		struct load_info *aux = malloc (sizeof (struct load_info));
+		aux -> file = file_reopen(file);
+		aux -> ofs = read_bytes;
+		aux -> page_read_bytes = page_read_bytes;
+		aux -> page_zero_bytes = page_zero_bytes;
+
+		// void *aux = NULL;
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+					writable, lazy_load_segment, (void *)aux)){
+			free(aux);
 			return false;
+		}
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		read_bytes += PGSIZE;
 	}
 	return true;
 }
@@ -906,6 +935,19 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
+
+	/* vm_entry 생성 */
+	/* vm_entry 멤버들 설정 */
+	/* insert_vme() 함수로 해시테이블에 추가 */
+
+	if (vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, 1))
+	{
+		success = vm_claim_page(stack_bottom);
+		if (success){
+			if_->rsp = USER_STACK;
+			thread_current()->stack_bottom = stack_bottom;
+		}
+	}
 
 	return success;
 }
