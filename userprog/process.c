@@ -278,6 +278,7 @@ process_exec (void *f_name) {
 
 	/* We first kill the current context */
 	process_cleanup ();
+	supplemental_page_table_init (&thread_current()->spt);
 
 	// Project 2-1. Pass args - parse
 	char *argv[30];
@@ -463,7 +464,9 @@ process_exit (void) {
 	file_close(curr->running);
 
 	/* Add vm_entry delete function */
-	process_cleanup (); // 안에 #VM supplemental_page_table_kill (&curr->spt);
+	if (curr->pml4 != NULL){
+		process_cleanup (); // 안에 #VM supplemental_page_table_kill (&curr->spt);
+	}
 
 	// Wake up blocked parent
 	sema_up(&curr->wait_sema);
@@ -893,7 +896,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
-	file_seek(file, ofs); // 얘 나중에
+	// file_seek(file, ofs); // 얘 나중에 빼도 될듯
+	off_t read_ofs = ofs; // ?
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
@@ -905,7 +909,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		
 		struct load_info *aux = malloc (sizeof (struct load_info));
 		aux -> file = file_reopen(file);
-		aux -> ofs = read_bytes;
+		aux -> ofs = read_ofs;
 		aux -> page_read_bytes = page_read_bytes;
 		aux -> page_zero_bytes = page_zero_bytes;
 
@@ -920,7 +924,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
-		read_bytes += PGSIZE;
+		read_ofs += PGSIZE;
 	}
 	return true;
 }
@@ -928,7 +932,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 static bool
 setup_stack (struct intr_frame *if_) {
-	bool success = false;
+	bool success = true;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
@@ -940,14 +944,18 @@ setup_stack (struct intr_frame *if_) {
 	/* vm_entry 멤버들 설정 */
 	/* insert_vme() 함수로 해시테이블에 추가 */
 
-	if (vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, 1))
-	{
-		success = vm_claim_page(stack_bottom);
-		if (success){
-			if_->rsp = USER_STACK;
-			thread_current()->stack_bottom = stack_bottom;
-		}
-	}
+	// if (vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, 1))
+	// {
+	// 	success = vm_claim_page(stack_bottom);
+	// 	if (success){
+	// 		if_->rsp = USER_STACK;
+	// 		thread_current()->stack_bottom = stack_bottom;
+	// 	}
+	// }
+	if (!vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom ,true)) return false;
+	if (!vm_claim_page(stack_bottom)) return false;
+	memset(stack_bottom, 0, PGSIZE);
+	if_->rsp = USER_STACK;
 
 	return success;
 }

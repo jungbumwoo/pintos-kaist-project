@@ -21,7 +21,7 @@ enum vm_type {
 
 	/* Auxillary bit flag marker for store information. You can add more
 	 * markers, until the value is fit in the int. */
-	VM_MARKER_0 = (1 << 3),
+	VM_MARKER_0 = (1 << 3), // 이전 버전들에서는 VM_STACK이었던 듯
 	VM_MARKER_1 = (1 << 4),
 
 	/* DO NOT EXCEED THIS VALUE. */
@@ -77,6 +77,8 @@ struct frame {
 
 	// You are allowed to add more members as you implement a frame management interface.
 	// 보통 리스트로 넣으려나?
+	/* elem for frame_list */
+	struct list_elem elem;
 };
 
 /* The function table for page operations.

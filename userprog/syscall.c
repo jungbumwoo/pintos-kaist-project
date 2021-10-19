@@ -20,7 +20,9 @@
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
-void check_address(uaddr);
+// void check_address(uaddr);
+void check_address(const uint64_t *uaddr);
+// void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write);
 
 void halt (void);
 void exit (int status);
@@ -53,6 +55,9 @@ void remove_file_from_fdt(int fd);
 const int STDIN = 1;
 const int STDOUT = 2;
 
+// Project3 
+static void check_writable_addr(void* ptr);
+
 
 // temp
 
@@ -83,6 +88,7 @@ syscall_init (void) {
 
 	// Project 2-4. File descriptor
 	lock_init(&file_rw_lock);
+	lock_init(&syscall_lock);
 }
 
 /* The main system call interface */
@@ -134,9 +140,11 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		f->R.rax = filesize(f->R.rdi);
 		break;
 	case SYS_READ:
+		// check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 1);
 		f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_WRITE:
+		// check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 0);
 		f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_SEEK:
@@ -178,20 +186,51 @@ syscall_handler (struct intr_frame *f UNUSED) {
 
 void check_address(const uint64_t *uaddr)
 {
-	/* 포인터가 가리키는 주소가 유저영역의 주소인지 확인 */
-
-	/* 잘못된 접근일 경우 프로세스 종료 */
-
-	/* 주소 값이 유저 영역에서 사용하는 주소 값인지 확인 하는 함수
-	Pintos에서는 시스템 콜이 접근할 수 있는 주소를 0x8048000~0xc0000000으로 제한함
-유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
-	/* ref) userprog/pagedir.c, threads/vaddr.h */
 	struct thread *cur = thread_current();
 	if (uaddr == NULL || !(is_user_vaddr(uaddr)) || pml4_get_page(cur->pml4, uaddr) == NULL)
 	{
 		exit(-1);
 	}
+	struct page *page = spt_find_page (&thread_current() -> spt, uaddr);
+	if (page == NULL) exit(-1);
 }
+
+// void check_address(const uint64_t *uaddr)
+// {
+// 	/* 포인터가 가리키는 주소가 유저영역의 주소인지 확인 */
+
+// 	/* 잘못된 접근일 경우 프로세스 종료 */
+
+// 	/* 주소 값이 유저 영역에서 사용하는 주소 값인지 확인 하는 함수
+// 	Pintos에서는 시스템 콜이 접근할 수 있는 주소를 0x8048000~0xc0000000으로 제한함
+// 유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
+// 	/* ref) userprog/pagedir.c, threads/vaddr.h */
+// 	struct thread *cur = thread_current();
+// 	if (uaddr == NULL || !(is_user_vaddr(uaddr)) || pml4_get_page(cur->pml4, uaddr) == NULL)
+// 	{
+// 		exit(-1);
+// 	}
+// }
+
+// void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write)
+// {
+// 	/* 인자로 받은 buffer부터 buffer + size까지의 크기가 한 페이지의
+// 	크기를 넘을 수도 있음 */
+// 	/* check_address를 이용해서 주소의 유저영역 여부를 검사함과 동시
+// 	에 vm_entry 구조체를 얻음 */
+// 	/* 해당 주소에 대한 vm_entry 존재여부와 vm_entry의 writable 멤
+// 	버가 true인지 검사 */
+// 	/* 위 내용을 buffer 부터 buffer + size까지의 주소에 포함되는
+// 	vm_entry들에 대해 적용 */
+// 	for (int i = 0; i < size; i++)
+// 	{
+// 		struct page *page = check_address(buffer + i);
+// 		if (page == NULL)
+// 			exit(-1);
+// 		if (to_write == true && page->writable == false) // to_write 
+// 			exit(-1);
+// 	}
+// }
 
 // void get_argument(void *esp, int *arg , int count)
 // {
@@ -248,9 +287,10 @@ int open(const char *file)
 	int fd = add_file_to_fdt(fileobj);
 
 	// FD table full
+	lock_acquire(&file_rw_lock);
 	if (fd == -1)
 		file_close(fileobj);
-
+	lock_release(&file_rw_lock);
 	return fd;
 }
 
@@ -268,6 +308,8 @@ int filesize(int fd)
 int read(int fd, void *buffer, unsigned size)
 {
 	check_address(buffer);
+	check_writable_addr(buffer);
+
 	int ret;
 	struct thread *cur = thread_current();
 
@@ -509,4 +551,10 @@ void remove_file_from_fdt(int fd)
 		return;
 
 	cur->fdTable[fd] = NULL;
+}
+
+static void
+check_writable_addr(void* ptr){
+	struct page *page = spt_find_page (&thread_current() -> spt, ptr);
+	if (page == NULL || !page->writable) exit(-1);
 }

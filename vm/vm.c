@@ -6,6 +6,8 @@
 #include "intrinsic.h"
 // #include "threads/mmu.h"
 
+static struct lock spt_kill_lock;
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -18,6 +20,7 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	lock_init(&spt_kill_lock);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -38,6 +41,9 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
+
+//project 3-2
+static struct lock spt_kill_lock;
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -104,7 +110,6 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		실패 시 false 반환
 	*/
 	struct hash_elem *result = hash_insert(spt->page_table, &page->hash_elem);
-	
 	return (result == NULL) ? true : false;
 }
 
@@ -179,6 +184,7 @@ vm_stack_growth (void *addr UNUSED) {
 /* Handle the fault on write_protected page */
 static bool
 vm_handle_wp (struct page *page UNUSED) {
+	return false;
 }
 
 /* Return true on success */
@@ -190,8 +196,8 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	/* TODO: Your code goes here */
 
 	uint64_t fault_addr = rcr2();
-	if (is_kernel_vaddr(fault_addr) && user) return false;
-	struct page *page = spt_find_page (spt, (void *) fault_addr);
+	if (is_kernel_vaddr(addr) && user) return false;
+	struct page *page = spt_find_page (spt, (void *) addr);
 	if (write && !not_present) return vm_handle_wp(page);
 	if (page == NULL) return false; 
 
@@ -270,7 +276,60 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
-			
+	/*Iterate Source spt hash table*/
+	struct hash_iterator i;
+	hash_first(&i, src->page_table);
+	while (hash_next(&i))
+	{
+		struct page *page = hash_entry(hash_cur(&i), struct page, hash_elem);
+
+		/*Handle UNINIT page*/
+		if (page->operations->type == VM_UNINIT)
+		{
+			vm_initializer *init = page->uninit.init;
+			bool writable = page->writable;
+			int type = page->uninit.type;
+			if (type & VM_ANON)
+			{
+				struct load_info *li = malloc(sizeof(struct load_info));
+				li->file = file_duplicate(((struct load_info *)page->uninit.aux)->file);
+				li->page_read_bytes = ((struct load_info *)page->uninit.aux)->page_read_bytes;
+				li->page_zero_bytes = ((struct load_info *)page->uninit.aux)->page_zero_bytes;
+				li->ofs = ((struct load_info *)page->uninit.aux)->ofs;
+				vm_alloc_page_with_initializer(type, page->va, writable, init, (void *)li);
+			}
+			else if (type & VM_FILE)
+			{
+				//Do_nothing(it should not inherit mmap)
+			}
+		}
+
+		/* Handle ANON/FILE page*/
+		else if (page_get_type(page) == VM_ANON)
+		{
+			if (!vm_alloc_page(page->operations->type, page->va, page->writable))
+				return false;
+			struct page *new_page = spt_find_page(&thread_current()->spt, page->va);
+			if (!vm_do_claim_page(new_page))
+				return false;
+			memcpy(new_page->frame->kva, page->frame->kva, PGSIZE);
+		}
+		else if (page_get_type(page) == VM_FILE)
+		{
+			//Do nothing(it should not inherit mmap)
+		}
+	}
+	return true;
+	
+}
+
+static void
+spt_destroy(struct hash_elem *e, void *aux UNUSED)
+{
+	struct page *page = hash_entry(e, struct page, hash_elem);
+	ASSERT(page != NULL);
+	destroy(page);
+	free(page);
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -280,6 +339,15 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	 * TODO: writeback all the modified contents to the storage. */
 	// 버킷리스트와 vm_entry들 제거
 	// hash_destroy 하면 될 덧
+
+	/* Destroy all the supplemental_page_table hold by thread and
+	 * writeback all the modified contents to the storage. */
+	if (spt->page_table == NULL)
+		return;
+	lock_acquire(&spt_kill_lock);
+	hash_destroy(spt->page_table, spt_destroy);
+	free(spt->page_table);
+	lock_release(&spt_kill_lock);
 }
 // 해시값 구해주는 함수
 unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED)
