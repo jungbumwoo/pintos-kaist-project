@@ -21,6 +21,7 @@ vm_init (void) {
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
 	lock_init(&spt_kill_lock);
+	
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -191,16 +192,20 @@ vm_handle_wp (struct page *page UNUSED) {
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+	// struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+
+	struct thread *curr = thread_current ();
+	struct supplemental_page_table *spt = &curr->spt;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 
 	uint64_t fault_addr = rcr2();
 	if (is_kernel_vaddr(addr) && user) return false;
+
 	struct page *page = spt_find_page (spt, (void *) addr);
-	if (write && !not_present) return vm_handle_wp(page);
 	if (page == NULL) return false; 
 
+	if (write && !not_present) return vm_handle_wp(page);
 	return vm_do_claim_page (page);
 }
 
@@ -342,8 +347,9 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 
 	/* Destroy all the supplemental_page_table hold by thread and
 	 * writeback all the modified contents to the storage. */
-	if (spt->page_table == NULL)
+	if (spt->page_table == NULL){
 		return;
+	}
 	lock_acquire(&spt_kill_lock);
 	hash_destroy(spt->page_table, spt_destroy);
 	free(spt->page_table);

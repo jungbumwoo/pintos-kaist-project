@@ -156,6 +156,12 @@ page_fault (struct intr_frame *f) {
 		return;
 #endif
 
+	if (user)
+	{
+		curr->exit_status = -1;
+		f->cs = SEL_UCSEG;
+	}
+
 	/* Count page faults. */
 	page_fault_cnt++;
 

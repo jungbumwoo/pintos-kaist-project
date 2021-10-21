@@ -855,6 +855,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	// printf("여긴오지만");
 	struct load_info* li = (struct load_info *) aux;
 	if (page == NULL) return false;
 	ASSERT(li -> page_read_bytes <= PGSIZE);
@@ -872,6 +873,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	memset(page -> va + li -> page_read_bytes, 0, li -> page_zero_bytes);
 	file_close(li -> file);
 	free(li);
+	// printf("여긴안온다");
 	return true;
 }
 
