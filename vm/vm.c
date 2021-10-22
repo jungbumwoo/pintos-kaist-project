@@ -180,6 +180,23 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	void *stack_bottom = pg_round_down(addr);
+	size_t req_stack_size = USER_STACK - (uintptr_t)stack_bottom;
+	if (req_stack_size > (1 << 20)) PANIC("Stack limit exceeded");
+
+	void *growing_stack_bottom = stack_bottom;
+	while((uintptr_t) growing_stack_bottom < USER_STACK &&
+		vm_alloc_page(VM_ANON | VM_MARKER_1, growing_stack_bottom, true)){
+			growing_stack_bottom += PGSIZE;
+		};
+	vm_claim_page(stack_bottom);
+	// if(vm_alloc_page(VM_ANON | VM_MARKER_0, addr, 1))
+	// {
+	// 	vm_claim_page(stack_bottom);
+	// 	thread_current()->stack_bottom -= PGSIZE; // 이거 아닌거같아서 주석처리함. 
+	// }
+
+	// Alloc page from tested region to re
 }
 
 /* Handle the fault on write_protected page */
@@ -201,6 +218,12 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 
 	uint64_t fault_addr = rcr2();
 	if (is_kernel_vaddr(addr) && user) return false;
+
+	void *stack_bottom = pg_round_down(curr->stack_bottom);
+	if (write && (stack_bottom - PGSIZE <= addr && (uintptr_t) addr < USER_STACK)){
+		vm_stack_growth(addr);
+		return true;
+	}
 
 	struct page *page = spt_find_page (spt, (void *) addr);
 	if (page == NULL) return false; 

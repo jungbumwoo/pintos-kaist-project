@@ -187,7 +187,8 @@ syscall_handler (struct intr_frame *f UNUSED) {
 void check_address(const uint64_t *uaddr)
 {
 	struct thread *cur = thread_current();
-	if (uaddr == NULL || !(is_user_vaddr(uaddr)) || pml4_get_page(cur->pml4, uaddr) == NULL)
+	// if (uaddr == NULL || !(is_user_vaddr(uaddr)) || pml4_get_page(cur->pml4, uaddr) == NULL)
+	if (uaddr == NULL || !(is_user_vaddr(uaddr)) || pml4e_walk(cur->pml4, uaddr, 0) == NULL)
 	{
 		exit(-1);
 	}
