@@ -3,10 +3,21 @@
 #include "filesys/file.h"
 #include "vm/vm.h"
 
+
 struct page;
 enum vm_type;
 
 struct file_page {
+	// 여기 채워야할거같은데?
+	struct file *file;
+	off_t size;
+	off_t ofs;
+};
+
+struct mmap_info {
+	struct file *file;
+	off_t ofs;
+	size_t page_read_bytes;
 };
 
 void vm_file_init (void);

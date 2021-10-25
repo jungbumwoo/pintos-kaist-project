@@ -9,6 +9,7 @@ int process_exec (void *f_name);
 int process_wait (tid_t);
 void process_exit (void);
 void process_activate (struct thread *next);
+bool lazy_load_segment (struct page *page, void *aux);
 
 // Project 2-3 Parent child
 struct thread *get_child_with_pid(int pid);
