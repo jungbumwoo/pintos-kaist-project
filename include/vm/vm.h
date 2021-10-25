@@ -78,7 +78,8 @@ struct frame {
 	// You are allowed to add more members as you implement a frame management interface.
 	// 보통 리스트로 넣으려나?
 	/* elem for frame_list */
-	struct list_elem elem;
+	struct list_elem elem; // 이거 뭐에 쓰더라? frame_elem이랑 충돌 안나겠지?
+	struct list_elem frame_elem; 
 };
 
 /* The function table for page operations.

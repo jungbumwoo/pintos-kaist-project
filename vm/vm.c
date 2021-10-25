@@ -8,6 +8,9 @@
 
 static struct lock spt_kill_lock;
 
+struct list frame_table;
+struct list_elem *start;
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -21,6 +24,9 @@ vm_init (void) {
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
 	lock_init(&spt_kill_lock);
+
+	list_init(&frame_table);
+	start = list_begin(&frame_table);
 	
 }
 
@@ -127,6 +133,27 @@ static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
+	struct thread *curr = thread_current();
+	struct list_elem *e = start;
+
+	for (start = e; start != list_end(&frame_table); start = list_next(start))
+    {
+        victim = list_entry(start, struct frame, frame_elem);
+        if (pml4_is_accessed(curr->pml4, victim->page->va))
+            pml4_set_accessed(curr->pml4, victim->page->va, 0);
+        else
+            return victim;
+    }
+
+    for (start = list_begin(&frame_table); start != e; start = list_next(start))
+    {
+        victim = list_entry(start, struct frame, frame_elem);
+        if (pml4_is_accessed(curr->pml4, victim->page->va))
+            pml4_set_accessed(curr->pml4, victim->page->va, 0);
+        else
+            return victim;
+    }
+
 
 	return victim;
 }
@@ -165,15 +192,18 @@ vm_get_frame (void) {
 	struct frame *frame = malloc(sizeof(struct frame));
 	frame->kva = palloc_get_page(PAL_USER);
 	frame->page = NULL;
-
 		// Add swap case handling
 	if (frame->kva == NULL)
 	{
 		free(frame);
 		frame = vm_evict_frame();
 	}
+	// list_push_back(&frame_table, &frame->frame_elem);  ?
+
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
+
+	
 	return frame;
 }
 
@@ -215,9 +245,11 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct supplemental_page_table *spt = &curr->spt;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-
+	
 	uint64_t fault_addr = rcr2();
-	if (is_kernel_vaddr(addr) && user) return false;
+	if (is_kernel_vaddr(addr) && user) {
+		return false;
+	}
 
 	void *stack_bottom = pg_round_down(curr->stack_bottom);
 	if (write && (stack_bottom - PGSIZE <= addr && (uintptr_t) addr < USER_STACK)){
@@ -226,7 +258,9 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	}
 
 	struct page *page = spt_find_page (spt, (void *) addr);
-	if (page == NULL) return false; 
+	if (page == NULL) {
+		return false;
+	} 
 
 	if (write && !not_present) return vm_handle_wp(page);
 	return vm_do_claim_page (page);
@@ -281,8 +315,10 @@ vm_do_claim_page (struct page *page) {
 	// 	list_insert(clock_elem, &frame->elem);
 	// else
 	// 	list_push_back(&frame_list, &frame->elem);
-	if (!pml4_set_page(curr->pml4, page->va, frame->kva, page->writable))
+	if (!pml4_set_page(curr->pml4, page->va, frame->kva, page->writable)){
+		printf("\n err at vm_do_claim_page \n");
 		return false;
+	}
 	return swap_in(page, frame->kva);
 }
 
