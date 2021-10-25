@@ -154,6 +154,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	esp
 	*/
 
+	struct thread* curr = thread_current ();
+	curr->stack_bottom = f->rsp;
+
+
 	switch (f->R.rax)
 	{
 	case SYS_HALT:
@@ -316,6 +320,7 @@ bool create(const char *file, unsigned initial_size)
 {
 	/* 파일 이름과 크기에 해당하는 파일 생성 */
 	/* 파일 생성 성공 시 true 반환, 실패 시 false 반환 */
+
 	check_address(file);
 	return filesys_create(file, initial_size);
 }

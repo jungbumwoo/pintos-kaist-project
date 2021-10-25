@@ -97,6 +97,18 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	struct thread *curr = thread_current ();
+
+	if (pml4_is_dirty (thread_current() -> pml4, page-> va)){
+		file_seek(file_page->file, file_page->ofs);
+		file_write(file_page->file, page->va, file_page->size);
+		pml4_set_dirty(curr->pml4, page->va, false);
+	}
+
+	pml4_clear_page(curr->pml4, page->va);
+	page->frame = NULL;
+
+	return true;
 }
 
 static bool lazy_load_file(struct page *page, void* aux){

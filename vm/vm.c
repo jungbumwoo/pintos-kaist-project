@@ -250,6 +250,8 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	if (is_kernel_vaddr(addr) && user) {
 		return false;
 	}
+	// page fault
+	// systemcall handler
 
 	void *stack_bottom = pg_round_down(curr->stack_bottom);
 	if (write && (stack_bottom - PGSIZE <= addr && (uintptr_t) addr < USER_STACK)){
@@ -260,7 +262,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = spt_find_page (spt, (void *) addr);
 	if (page == NULL) {
 		return false;
-	} 
+	}
 
 	if (write && !not_present) return vm_handle_wp(page);
 	return vm_do_claim_page (page);

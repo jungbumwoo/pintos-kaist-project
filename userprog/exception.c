@@ -140,9 +140,9 @@ page_fault (struct intr_frame *f) {
 	write = (f->error_code & PF_W) != 0;
 	user = (f->error_code & PF_U) != 0;
 
-	// if (user){
-	// 	curr->stack_bottom = f->rsp;
-	// }
+	if (user){
+		curr->stack_bottom = f->rsp;
+	}
 
 #ifdef VM
 	/* For project 3 and later. */
