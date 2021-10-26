@@ -58,6 +58,8 @@ const int STDOUT = 2;
 // Project3 
 static void check_writable_addr(void* ptr);
 
+void *mmap_s (void *addr, size_t length, int writable, int fd, off_t offset);
+
 
 // temp
 
@@ -90,51 +92,6 @@ syscall_init (void) {
 	lock_init(&file_rw_lock);
 	lock_init(&syscall_lock);
 }
-
-
-void *mmap (void *addr, size_t length, int writable, int fd, off_t offset){
-	/* 
-	A call to mmap may fail if the file opened as fd has a length of zero bytes. 
-	파일의 	byte 수가 0은 아닌지
-	It must fail if addr is not page-aligned 
-	or if the range of pages mapped overlaps any existing set of mapped pages, 
-	including the stack or pages mapped at executable load time. 
-
-
-	In Linux, if addr is NULL, the kernel finds an appropriate address at which to create the mapping. 
-	For simplicity, you can just attempt to mmap at the given addr. 
-
-	Therefore, if addr is 0, it must fail, because some Pintos code assumes virtual page 0 is not mapped. 
-	Your mmap should also fail when length is zero. 
-
-	Finally, the file descriptors representing console input and output are not mappable.
-	Memory-mapped pages should be also allocated in a lazy manner just like anonymous pages. 
-	You can use vm_alloc_page_with_initializer or vm_alloc_page to make a page object.
-	*/
-	if (offset % PGSIZE != 0)
-	{
-		return NULL;
-	}
-
-	if (pg_round_down(addr) != addr || is_kernel_vaddr(addr) || addr == NULL || (long long)length <= 0)
-		return NULL;
-
-	if (fd == 0 || fd == 1)
-		exit(-1);
-
-	if (spt_find_page(&thread_current()->spt, addr))
-		return NULL;
-
-	struct file *target = find_file_by_fd(fd);
-
-	if (target == NULL) 
-		return NULL;
-
-	void *ret = do_mmap(addr, length, writable, target, offset);
-
-	return ret;
-}
-
 
 /* The main system call interface */
 void
@@ -209,7 +166,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		f->R.rax = dup2(f->R.rdi, f->R.rsi);
 		break;
 	case SYS_MMAP:
-		f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+		f->R.rax = mmap_s(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
 		break;
 	case SYS_MUNMAP:
 		munmap(f->R.rdi);
@@ -619,3 +576,42 @@ check_writable_addr(void* ptr){
 void munmap (void *addr){
 	do_munmap(addr);	
 }
+
+
+
+void *mmap_s (void *addr, size_t length, int writable, int fd, off_t offset){
+	/* 
+	A call to mmap may fail if the file opened as fd has a length of zero bytes. 
+	파일의 	byte 수가 0은 아닌지
+	It must fail if addr is not page-aligned 
+	or if the range of pages mapped overlaps any existing set of mapped pages, 
+	including the stack or pages mapped at executable load time. 
+
+
+	In Linux, if addr is NULL, the kernel finds an appropriate address at which to create the mapping. 
+	For simplicity, you can just attempt to mmap at the given addr. 
+
+	Therefore, if addr is 0, it must fail, because some Pintos code assumes virtual page 0 is not mapped. 
+	Your mmap should also fail when length is zero. 
+
+	Finally, the file descriptors representing console input and output are not mappable.
+	Memory-mapped pages should be also allocated in a lazy manner just like anonymous pages. 
+	You can use vm_alloc_page_with_initializer or vm_alloc_page to make a page object.
+	*/
+
+	if (addr == 0 || (!is_user_vaddr(addr))) return NULL;
+	if ((uint64_t)addr % PGSIZE != 0) return NULL;
+	if (offset % PGSIZE != 0) return NULL;
+	if ((uint64_t)addr + length == 0) return NULL;
+	if (!is_user_vaddr((uint64_t)addr + length)) return NULL;
+	for (uint64_t i = (uint64_t) addr; i < (uint64_t) addr + length; i += PGSIZE){
+		if (spt_find_page (&thread_current() -> spt, (void*) i)!=NULL) return NULL;
+	}
+
+	if (length == 0) return NULL;
+	struct file* file = find_file_by_fd(fd);
+	if(file == NULL) return NULL;
+
+	return do_mmap(addr, length, writable, file, offset);
+}
+

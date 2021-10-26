@@ -245,8 +245,8 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct supplemental_page_table *spt = &curr->spt;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-	
-	uint64_t fault_addr = rcr2();
+	// printf("\n 여기? \n");
+	// uint64_t fault_addr = rcr2();
 	if (is_kernel_vaddr(addr) && user) {
 		return false;
 	}
@@ -411,6 +411,7 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	if (spt->page_table == NULL){
 		return;
 	}
+	
 	lock_acquire(&spt_kill_lock);
 	hash_destroy(spt->page_table, spt_destroy);
 	free(spt->page_table);

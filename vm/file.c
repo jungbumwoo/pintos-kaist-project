@@ -34,9 +34,12 @@ struct mmap_file_info{
 bool
 file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
+	struct file* file = ((struct mmap_info*)page ->uninit.aux)->file;
 	page->operations = &file_ops;
 
 	struct file_page *file_page = &page->file;
+	file_page -> file = file;
+	return true;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -136,13 +139,14 @@ do_mmap (void *addr, size_t length, int writable,
 		read_bytes = length - i >= PGSIZE ? PGSIZE : length -i;
 		mi->file = file_reopen(file);
 		mi->ofs = ofs;
-		mi->page_read_bytes;
+		mi->page_read_bytes = read_bytes;
 		vm_alloc_page_with_initializer(VM_FILE, (void *) ((uint64_t) addr + i), writable, lazy_load_file, (void *)mi);
 	}
 	struct mmap_file_info* mfi = malloc(sizeof (struct mmap_file_info));
 	mfi->start = (uint64_t) addr;
 	mfi->end = (uint64_t) pg_round_down((uint64_t) addr + length -1);
 	list_push_back(&mmap_file_list, &mfi->elem);
+	
 	return addr;
 	/* 
 	A call to mmap may fail if the file opened as fd has a length of zero bytes. 

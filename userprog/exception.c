@@ -76,7 +76,7 @@ kill (struct intr_frame *f) {
 	   the kernel.  Real Unix-like operating systems pass most
 	   exceptions back to the process via signals, but we don't
 	   implement them. */
-
+	
 	/* The interrupt frame's code segment value tells us where the
 	   exception originated. */
 	switch (f->cs) {
@@ -167,11 +167,13 @@ page_fault (struct intr_frame *f) {
 	page_fault_cnt++;
 
 	/* If the fault is true fault, show info and exit. */
-	printf ("Page fault at %p: %s error %s page in %s context.\n",
-			fault_addr,
-			not_present ? "not present" : "rights violation",
-			write ? "writing" : "reading",
-			user ? "user" : "kernel");
+	// printf ("Page fault at %p: %s error %s page in %s context.\n",
+	// 		fault_addr,
+	// 		not_present ? "not present" : "rights violation",
+	// 		write ? "writing" : "reading",
+	// 		user ? "user" : "kernel");
+
+	
 	kill (f);
 	// exit(-1); // multi-oom and other Project2 test-cases
 }

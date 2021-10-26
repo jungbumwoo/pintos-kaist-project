@@ -468,8 +468,7 @@ process_exit (void) {
 	if (curr->pml4 != NULL){
 		process_cleanup (); // 안에 #VM supplemental_page_table_kill (&curr->spt);
 		printf ("%s: exit(%d)\n", curr->name, curr->exit_status);
-	}
-
+	};
 	// Wake up blocked parent
 	sema_up(&curr->wait_sema);
 	
@@ -483,6 +482,7 @@ process_exit (void) {
 static void
 process_cleanup (void) {
 	struct thread *curr = thread_current ();
+	
 
 #ifdef VM
 	supplemental_page_table_kill (&curr->spt);

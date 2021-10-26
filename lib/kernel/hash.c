@@ -64,7 +64,6 @@ hash_clear (struct hash *h, hash_action_func *destructor) {
 			}
 		list_init (bucket);
 	}
-
 	h->elem_cnt = 0;
 }
 
