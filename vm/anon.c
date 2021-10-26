@@ -53,12 +53,52 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 anon_swap_in (struct page *page, void *kva) {
 	struct anon_page *anon_page = &page->anon;
+	if (anon_page->swap_slot_idx == INVALID_SLOT_IDX) return false;
+
+	disk_sector_t sec_no;
+	// Read page from disk with sector size chunk
+	for (int i = 0; i < SECTORS_PER_PAGE; i++){
+		sec_no = (disk_sector_t) (anon_page->swap_slot_idx * SECTORS_PER_PAGE) + i;
+		off_t ofs = i * DISK_SECTOR_SIZE;
+		disk_read(swap_disk, sec_no, kva+ofs);
+	}
+	bitmap_set (swap_table, anon_page->swap_slot_idx, false);
+	anon_page->swap_slot_idx = INVALID_SLOT_IDX;
+	return true;
 }
 
 /* Swap out the page by writing contents to the swap disk. */
 static bool
 anon_swap_out (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+
+	// Get swap slot index from swap table
+	size_t swap_slot_idx = bitmap_scan_and_flip(swap_table, 0, 1, false);
+	if (swap_slot_idx == BITMAP_ERROR)
+		PANIC("There is no free swap slot!!");
+
+	if (page == NULL || page->frame == NULL || page->frame->kva == NULL)
+		return false;
+
+	// Copy page frame content to swap_slot
+	disk_sector_t sec_no;
+	// Write page to disk with sector size chunk
+	for (int i = 0; i < SECTORS_PER_PAGE; i++) {
+		// convert swap slot index to writing sector number
+		sec_no = (disk_sector_t) (swap_slot_idx * SECTORS_PER_PAGE) + i;
+		off_t ofs = i * DISK_SECTOR_SIZE;
+		disk_write (swap_disk, sec_no, page->frame->kva + ofs);
+	}
+	anon_page->swap_slot_idx = swap_slot_idx;
+
+	// Set "not present" to page, and clear
+	pml4_clear_page(anon_page->owner->pml4, page->va);
+	pml4_set_dirty(anon_page->owner->pml4, page->va, false);
+	page->frame = NULL;
+
+	return true;
+	// Copy page frame content to swap_slot
+	
 }
 
 /* Destroy the anonymous page. PAGE will be freed by the caller. */
@@ -66,8 +106,8 @@ static void
 anon_destroy (struct page *page) {
 	// struct anon_page *anon_page = &page->anon;
 	if (page -> frame!= NULL){
-		// list_remove (&page->frame->elem);
-		// free(page->frame); // 얘
+		list_remove (&page->frame->elem);
+		free(page->frame); // 얘
 	}
 	else {
 		// Swapped anon page case

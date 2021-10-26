@@ -45,55 +45,35 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 /* Swap in the page by read contents from the file. */
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
-	struct file_page *file_page UNUSED = &page->file;
+	struct file_page *file_page = &page->file;
+	if (file_page->file == NULL) return false;
 
-    if (page == NULL)
-        return false;
+	file_seek (file_page->file, file_page->ofs);
+	off_t read_size = file_read (file_page->file, kva, file_page->size);
+	if (read_size != file_page->size) return false;
+	if (read_size < PGSIZE)
+		memset (kva + read_size, 0, PGSIZE - read_size);
 
-    struct load_info *aux = (struct load_info *)page->uninit.aux;
-
-    struct file *file = aux->file;
-    off_t offset = aux->ofs;
-    size_t page_read_bytes = aux->page_read_bytes;
-    size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-    /* Get a page of memory. */
-
-    /* Load this page. */
-
-    file_seek(file, offset);
-
-    if (file_read(file, kva, page_read_bytes) != (int)page_read_bytes)
-    {
-        // palloc_free_page (kva);
-        return false;
-    }
-    // printf("여기서 터지나요??\n");
-    // printf("lazy load file file pos :: %d\n", file->pos);
-    memset(kva + page_read_bytes, 0, page_zero_bytes);
-    // /* Add the page to the process's address space. */
-
-    return true;
+	return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out (struct page *page) {
-	struct file_page *file_page UNUSED = &page->file;
+	struct file_page *file_page = &page->file;
+	struct thread *curr = thread_current ();
 
-    if (page == NULL)
-        return false;
+	if (pml4_is_dirty (curr->pml4, page->va)) {
+		file_seek (file_page->file, file_page->ofs);
+		file_write (file_page->file, page->va, file_page->size);
+		pml4_set_dirty (curr->pml4, page->va, false);
+	}
 
-    struct load_info *aux = (struct load_info *)page->uninit.aux;
+	// Set "not present" to page, and clear.
+	pml4_clear_page (curr->pml4, page->va);
+	page->frame = NULL;
 
-    //! DIRTY CHECK
-    if (pml4_is_dirty(thread_current()->pml4, page->va))
-    {
-        file_write_at(aux->file, page->va, aux->page_read_bytes, aux->ofs);
-        pml4_set_dirty(thread_current()->pml4, page->va, 0);
-    }
-
-    pml4_clear_page(thread_current()->pml4, page->va);
+	return true;
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */

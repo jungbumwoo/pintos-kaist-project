@@ -11,6 +11,12 @@ static struct lock spt_kill_lock;
 struct list frame_table;
 struct list_elem *start;
 
+// project3-5 swap in/ swap out
+static struct list frame_list;
+static struct list_elem *clock_elem;
+static struct lock clock_lock;
+
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -27,7 +33,9 @@ vm_init (void) {
 
 	list_init(&frame_table);
 	start = list_begin(&frame_table);
-	
+
+	list_init(&frame_list);
+	lock_init(&clock_lock);	
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -72,6 +80,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 		/* TODO: Insert the page into the spt. */
 		struct page *page = malloc(sizeof (struct page));
+		//if (page == NULL) return false;
 		if(VM_TYPE(type) == VM_ANON){
 			uninit_new (page, upage, init, type, aux, anon_initializer);
 		} else if (VM_TYPE(type) == VM_FILE){
@@ -128,55 +137,62 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 	return;
 }
 
+static struct list_elem *
+list_next_cycle (struct list *lst, struct list_elem *elem) {
+      struct list_elem *cand_elem = elem;
+      if (cand_elem == list_back (lst))
+	    // Repeat from the front
+	    cand_elem = list_front (lst);
+      else
+	    cand_elem = list_next (cand_elem);
+      return cand_elem;
+}
+
+
 /* Get the struct frame, that will be evicted. */
 static struct frame *
 vm_get_victim (void) {
-	struct frame *victim = NULL;
-	 /* TODO: The policy for eviction is up to you. */
-	struct thread *curr = thread_current();
-	struct list_elem *e = start;
+	/* Simple Clock Algorithm with Vairable Space? */
+	struct frame *candidate = NULL;
+	struct thread *curr = thread_current ();
 
-	for (start = e; start != list_end(&frame_table); start = list_next(start))
-    {
-        victim = list_entry(start, struct frame, frame_elem);
-        if (pml4_is_accessed(curr->pml4, victim->page->va))
-            pml4_set_accessed(curr->pml4, victim->page->va, 0);
-        else
-            return victim;
-    }
+	// This need careful synchronization, race between threads.
+	lock_acquire (&clock_lock);
+	struct list_elem *cand_elem = clock_elem;
+	if (cand_elem == NULL && !list_empty (&frame_list))
+	      cand_elem = list_front (&frame_list);
+	while (cand_elem != NULL) {
+	      // Check frame accessed
+	      candidate = list_entry (cand_elem, struct frame, elem);
+	      if (!pml4_is_accessed (curr->pml4, candidate->page->va))
+		    break; // Found!
+	      pml4_set_accessed (curr->pml4, candidate->page->va, false);
 
-    for (start = list_begin(&frame_table); start != e; start = list_next(start))
-    {
-        victim = list_entry(start, struct frame, frame_elem);
-        if (pml4_is_accessed(curr->pml4, victim->page->va))
-            pml4_set_accessed(curr->pml4, victim->page->va, 0);
-        else
-            return victim;
-    }
+	      cand_elem = list_next_cycle (&frame_list, cand_elem);	}
+	// Candidate in frame_list at clock_elem will be evicted.
+	// Tick clock.
+	clock_elem = list_next_cycle (&frame_list, cand_elem);
+	list_remove (cand_elem);
+	lock_release (&clock_lock);
 
-
-	return victim;
+	return candidate;
 }
 
 /* Evict one page and return the corresponding frame.
  * Return NULL on error.*/
 static struct frame *
 vm_evict_frame (void) {
-	struct frame *victim UNUSED = vm_get_victim ();
-	/* TODO: swap out the victim and return the evicted frame. */
-	if (victim == NULL)
-		return NULL;
+	struct frame *victim = vm_get_victim ();
+	if (victim == NULL) return NULL;
 
-	/* Swap out the victim and return the evicted frame */
+	/* Swap out the victim and return the evicted frame. */
 	struct page *page = victim->page;
-	bool swap_done = swap_out(page);
-	if (!swap_done)
-		PANIC("Swap is full\n");
+	bool swap_done = swap_out (page);
+	if (!swap_done) PANIC("Swap is full!\n");
 
-	// clear frame
-	// &page = NULL; : err(lvalue required as left operand of assignment)
-	page = NULL; // 명확하게 해주자면 victim -> page
-	memset(victim->kva, 0, PGSIZE);
+	// Clear frame
+	victim->page = NULL;
+	memset (victim->kva, 0, PGSIZE);
 
 	return victim;
 }
@@ -198,7 +214,7 @@ vm_get_frame (void) {
 		free(frame);
 		frame = vm_evict_frame();
 	}
-	// list_push_back(&frame_table, &frame->frame_elem);  ?
+	// list_push_back(&frame_table, &frame->frame_elem);  여기에 넣나? 아니면 vm_do_claim_page?
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -316,7 +332,7 @@ vm_do_claim_page (struct page *page) {
 	// 	// Just before current clock
 	// 	list_insert(clock_elem, &frame->elem);
 	// else
-	// 	list_push_back(&frame_list, &frame->elem);
+	list_push_back(&frame_list, &frame->elem);
 	if (!pml4_set_page(curr->pml4, page->va, frame->kva, page->writable)){
 		printf("\n err at vm_do_claim_page \n");
 		return false;

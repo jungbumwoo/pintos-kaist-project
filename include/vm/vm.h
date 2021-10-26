@@ -68,6 +68,9 @@ struct page {
 		struct page_cache page_cache;
 #endif
 	};
+
+	void *kva; /* kernel virtual address - physical memory와 mapping 되어 있는 address */
+	
 };
 
 /* The representation of "frame" */
@@ -79,7 +82,7 @@ struct frame {
 	// 보통 리스트로 넣으려나?
 	/* elem for frame_list */
 	struct list_elem elem; // 이거 뭐에 쓰더라? frame_elem이랑 충돌 안나겠지?
-	struct list_elem frame_elem; 
+	// struct list_elem frame_elem; 
 };
 
 /* The function table for page operations.
