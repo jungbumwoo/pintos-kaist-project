@@ -46,6 +46,7 @@ filesys_init (bool format) {
 void
 filesys_done (void) {
 	/* Original FS */
+	/*  The cache should also be written back to disk*/
 #ifdef EFILESYS
 	fat_close ();
 #else

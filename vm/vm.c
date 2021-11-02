@@ -231,11 +231,17 @@ vm_stack_growth (void *addr UNUSED) {
 	if (req_stack_size > (1 << 20)) PANIC("Stack limit exceeded");
 
 	void *growing_stack_bottom = stack_bottom;
+	int i;
+	i = 0;
 	while((uintptr_t) growing_stack_bottom < USER_STACK &&
 		vm_alloc_page(VM_ANON | VM_MARKER_1, growing_stack_bottom, true)){
 			growing_stack_bottom += PGSIZE;
+		i++;
+		printf("\n i: %d \n", i);
 		};
+
 	vm_claim_page(stack_bottom);
+	
 	// if(vm_alloc_page(VM_ANON | VM_MARKER_0, addr, 1))
 	// {
 	// 	vm_claim_page(stack_bottom);

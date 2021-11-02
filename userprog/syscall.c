@@ -279,7 +279,10 @@ bool create(const char *file, unsigned initial_size)
 	/* 파일 생성 성공 시 true 반환, 실패 시 false 반환 */
 
 	check_address(file);
-	return filesys_create(file, initial_size);
+	lock_acquire(&file_rw_lock);
+	bool result = filesys_create(file, initial_size);
+	lock_release(&file_rw_lock);
+	return result;
 }
 
 bool remove(const char *file)
@@ -287,7 +290,10 @@ bool remove(const char *file)
 	/* 파일 이름에 해당하는 파일을 제거 */
 	/* 파일 제거 성공 시 true 반환, 실패 시 false 반환 */
 	check_address(file);
-	return filesys_remove(file);
+	lock_acquire(&file_rw_lock);
+	bool result = filesys_remove(file);
+	lock_release(&file_rw_lock);
+	return result;
 }
 
 int open(const char *file)
